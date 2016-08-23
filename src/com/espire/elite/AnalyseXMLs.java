@@ -291,8 +291,8 @@ public class AnalyseXMLs {
 			}
 //                .xml  pu,fv--v1,v2,v3
 			// <fileName,Map<tagName, Map<tagValue, Set<diffrentVersions>>>>
-			Map<String, Map<String, Map<String, Set<ElementWrapper>>>> existingTagsMap = new HashMap<>();
-			Map<String, Map<String, Set<ElementWrapper>>> existingTags = new HashMap<>();
+			Map<String, Map<String, Map<TagValueWrapper, Set<ElementWrapper>>>> existingTagsMap = new HashMap<>();
+			Map<String, Map<TagValueWrapper, Set<ElementWrapper>>> existingTags = new HashMap<>();
 			for (String tagNameCurrent : tagValuesMap.keySet()) {
 				Set<Element> tagValues = tagValuesMap.get(tagNameCurrent);
 				for (Element tagValue : tagValues) {
@@ -301,19 +301,30 @@ public class AnalyseXMLs {
 						for (String tagName : tagNames) {
 							if (tagName.equals(tagNameCurrent)) {
 								if (existingTags.get(tagName) == null) {
-									Map<String, Set<ElementWrapper>> map = new HashMap<>();
+									Map<TagValueWrapper, Set<ElementWrapper>> map = new HashMap<>();
 									existingTags.put(tagName, map);
 								}
 								if (existingTags.get(tagName).get(tagValue.getAttribute("Name")) == null) {
-
-									existingTags.get(tagName).put(tagValue.getAttribute("Name"), new HashSet<>());
+									TagValueWrapper tagValueWrapper=new TagValueWrapper();
+									tagValueWrapper.setTagValue(tagValue.getAttribute("Name"));
+									if(tagName.equals("ProgramUnit")){										
+										tagValueWrapper.setOtherKey(tagValue.getAttribute("ProgramUnitType"));
+									}
+									existingTags.get(tagName).put(tagValueWrapper, new HashSet<>());
 								}
 								if (wrapperFile.getTagData().get(tagName) != null
 										&& wrapperFile.getTagData().get(tagName).contains(tagValue)) {
 									ElementWrapper elementWrapper = new ElementWrapper(tagValue,
 											wrapperFile.getVersion());
 									// existingTags.get(tagName).get(tagValue.getAttribute("Name")).add(wrapperFile.getVersion());
-									existingTags.get(tagName).get(tagValue.getAttribute("Name")).add(elementWrapper);
+									TagValueWrapper tagValueWrapper=new TagValueWrapper();
+									tagValueWrapper.setTagValue(tagValue.getAttribute("Name"));
+									if(tagName.equals("ProgramUnit")){
+										
+										tagValueWrapper.setOtherKey(tagValue.getAttribute("ProgramUnitType"));
+									}
+									
+									existingTags.get(tagName).get(tagValueWrapper).add(elementWrapper);
 								}
 							}
 						}
@@ -322,24 +333,24 @@ public class AnalyseXMLs {
 			}
 			for (String fileName1 : existingTagsMap.keySet()) {
 
-				Map<String, Map<String, Set<ElementWrapper>>> existingTagsForFile = existingTagsMap.get(fileName1);
+				Map<String, Map<TagValueWrapper, Set<ElementWrapper>>> existingTagsForFile = existingTagsMap.get(fileName1);
 //				Integer rowNum = 1;
 				for (String tagName : existingTagsForFile.keySet()) {
 
-					for (String tagValue : existingTagsForFile.get(tagName).keySet()) {
+					for (TagValueWrapper tagValueWrapper : existingTagsForFile.get(tagName).keySet()) {
 						List<String> status = new ArrayList<String>();
 
-						System.out.print("," + tagName + "," + tagValue);
+						System.out.print("," + tagName + "," + tagValueWrapper.getTagValue());
 						status.add(fileName1);
 						status.add(tagName);
-						status.add(tagValue);
+						status.add(tagValueWrapper.getTagValue());
 
 						for (String verion : versionSet) {
 							ElementWrapper elementWrapperVersion = new ElementWrapper(null, verion);
 							ElementWrapper elementWrapperBaseVersion = null;
 							ElementWrapper elementWrapperCurrentVersion = null;
 
-							for (Iterator<ElementWrapper> iterator = existingTagsForFile.get(tagName).get(tagValue)
+							for (Iterator<ElementWrapper> iterator = existingTagsForFile.get(tagName).get(tagValueWrapper)
 									.iterator(); iterator.hasNext();) {
 								ElementWrapper currentElement = iterator.next();
 								if (currentElement.getVersionNumber().equals(verion)) {
@@ -349,7 +360,7 @@ public class AnalyseXMLs {
 
 							}
 
-							for (Iterator<ElementWrapper> iterator = existingTagsForFile.get(tagName).get(tagValue)
+							for (Iterator<ElementWrapper> iterator = existingTagsForFile.get(tagName).get(tagValueWrapper)
 									.iterator(); iterator.hasNext();) {
 								ElementWrapper currentElement = iterator.next();
 								if (currentElement.getVersionNumber().equals(baseVersion)) {
@@ -360,8 +371,8 @@ public class AnalyseXMLs {
 							}
 							// existingTagsForFile.get(tagName).get(tagValue).
 
-							if (existingTagsForFile.get(tagName).get(tagValue) != null
-									&& existingTagsForFile.get(tagName).get(tagValue).contains(elementWrapperVersion)) {
+							if (existingTagsForFile.get(tagName).get(tagValueWrapper) != null
+									&& existingTagsForFile.get(tagName).get(tagValueWrapper).contains(elementWrapperVersion)) {
 
 								if (elementWrapperCurrentVersion != null && elementWrapperBaseVersion != null
 										&& !elementWrapperBaseVersion.getVersionNumber()
