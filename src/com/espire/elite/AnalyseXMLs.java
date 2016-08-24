@@ -32,7 +32,7 @@ import org.xml.sax.SAXException;
 public class AnalyseXMLs {
 	private Set<String> comparedFiles = new HashSet<>();
 	private Map<String, Map<String, String>> versionFileIndex = new HashMap<>();
-	private Map<String, Set<WrapperFile>> diffVersionFiles = new HashMap<>();
+	private Map<String, Set<WrapperFile>> commonFiles = new HashMap<>();
 	private Set<String> versionSet = new HashSet<String>();
 	private String baseVersion = null;
 	File directory;
@@ -45,16 +45,16 @@ public class AnalyseXMLs {
 
 	public static void main(String[] args) {
 		AnalyseXMLs analyseXMLs = new AnalyseXMLs();
-		Integer roNum = 1;
 		analyseXMLs.init();
 		Map<String, Object[]> data = analyseXMLs.scanFiles();
-		data = analyseXMLs.identifyDuplicateFiles(data, roNum);
+		data = analyseXMLs.identifyDuplicateFiles(data);
 
 		XSSFSheet sheet = workbook.createSheet("File Availability");
 		XLWriter.addToSheet(workbook, sheet, data);
 
-		analyseXMLs.scanTags();
-
+		Map<String, Object[]> xmlcompdata = analyseXMLs.scanTags();
+		XSSFSheet summarySheet = workbook.createSheet("Summary");
+		XLWriter.addToSheet(workbook, summarySheet, xmlcompdata);
 		XLWriter.writeXL(workbook,xmlPath);
 	}
 	
@@ -126,8 +126,9 @@ public class AnalyseXMLs {
 	 * @param rownum the file roe Index pointer 
 	 */
 	
-	private Map<String, Object[]> identifyDuplicateFiles(Map<String, Object[]> data, Integer rownum) {
+	private Map<String, Object[]> identifyDuplicateFiles(Map<String, Object[]> data ) {
 
+		Integer rownum =1;
 		Set<String> versionSet = versionFileIndex.keySet();
 		for (String version : versionSet) {
 			Map<String, String> files = versionFileIndex.get(version);
@@ -151,11 +152,11 @@ public class AnalyseXMLs {
 						wrapperFile.setFileName(fileName);
 						wrapperFile.setFilePath(versionFileIndex.get(innerVersion).get(fileName));
 
-						if (diffVersionFiles.get(fileName) == null) {
+						if (commonFiles.get(fileName) == null) {
 							Set<WrapperFile> Wrapperfiles = new HashSet();
-							diffVersionFiles.put(fileName, Wrapperfiles);
+							commonFiles.put(fileName, Wrapperfiles);
 						}
-						diffVersionFiles.get(fileName).add(wrapperFile);
+						commonFiles.get(fileName).add(wrapperFile);
 
 					} else if (!version.equals(innerVersion) && !comparedFiles.contains(fileName)) {
 						System.out.print(",No");
@@ -189,7 +190,6 @@ public class AnalyseXMLs {
 			doc.getDocumentElement().normalize();
 			XPath xPath = XPathFactory.newInstance().newXPath();
 			for (String tagName : tagXpathMap.keySet()) {
-			//for (String expression : tagForScan.keySet()) {
 				String expression = tagXpathMap.get(tagName);
 				NodeList nodeList = (NodeList) xPath.compile(expression).evaluate(doc, XPathConstants.NODESET);
 				for (int i = 0; i < nodeList.getLength(); i++) {
@@ -220,7 +220,7 @@ public class AnalyseXMLs {
 		wrapperFile.setTagData(tagData);
 	}
 
-	public void scanTags() {
+	private Map<String, Object[]> scanTags() {
 		Map<String, Object[]> data = new HashMap<String, Object[]>();
 		tagHeaderList.add("File Name");
 		tagHeaderList.add("Tag Name");
@@ -231,7 +231,7 @@ public class AnalyseXMLs {
 		tagHeaderList.toArray(headerArray);
 		Integer rowNum = 1;
 		data.put("1", headerArray);
-		for (String fileName : diffVersionFiles.keySet()) {
+		for (String fileName : commonFiles.keySet()) {
 			// Set<String> tagValues = new HashSet<>();
 			Map<String, Set<Element>> tagValuesMap = new HashMap<>();
 
@@ -242,7 +242,7 @@ public class AnalyseXMLs {
 			
 			// status.add(fileName);
 
-			for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
+			for (WrapperFile wrapperFile : commonFiles.get(fileName)) {
 				getXMLData(wrapperFile);
 				for (String tagName : wrapperFile.getTagData().keySet()) {
 					if (tagValuesMap.get(tagName) == null) {
@@ -256,34 +256,34 @@ public class AnalyseXMLs {
 			Map<String, Map<String, Map<TagValueWrapper, Set<ElementWrapper>>>> existingTagsMap = new HashMap<>();
 			Map<String, Map<TagValueWrapper, Set<ElementWrapper>>> existingTags = new HashMap<>();
 			for (String tagNameCurrent : tagValuesMap.keySet()) {
-				Set<Element> tagValues = tagValuesMap.get(tagNameCurrent);
-				for (Element tagValue : tagValues) {
+				Set<Element> elementSet = tagValuesMap.get(tagNameCurrent);
+				for (Element element : elementSet) {
 					existingTagsMap.put(fileName, existingTags);
-					for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
+					for (WrapperFile wrapperFile : commonFiles.get(fileName)) {
 						for (String tagName :  tagXpathMap.keySet()) {
 							if (tagName.equals(tagNameCurrent)) {
 								if (existingTags.get(tagName) == null) {
 									Map<TagValueWrapper, Set<ElementWrapper>> map = new HashMap<>();
 									existingTags.put(tagName, map);
 								}
-								if (existingTags.get(tagName).get(tagValue.getAttribute("Name")) == null) {
+								if (existingTags.get(tagName).get(element.getAttribute("Name")) == null) {
 									TagValueWrapper tagValueWrapper=new TagValueWrapper();
-									tagValueWrapper.setTagValue(tagValue.getAttribute("Name"));
+									tagValueWrapper.setTagValue(element.getAttribute("Name"));
 									if(tagName.equals("ProgramUnit")){										
-										tagValueWrapper.setOtherKey(tagValue.getAttribute("ProgramUnitType"));
+										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
 									}
 									existingTags.get(tagName).put(tagValueWrapper, new HashSet<>());
 								}
 								if (wrapperFile.getTagData().get(tagName) != null
-										&& wrapperFile.getTagData().get(tagName).contains(tagValue)) {
-									ElementWrapper elementWrapper = new ElementWrapper(tagValue,
+										&& wrapperFile.getTagData().get(tagName).contains(element)) {
+									ElementWrapper elementWrapper = new ElementWrapper(element,
 											wrapperFile.getVersion());
 									// existingTags.get(tagName).get(tagValue.getAttribute("Name")).add(wrapperFile.getVersion());
 									TagValueWrapper tagValueWrapper=new TagValueWrapper();
-									tagValueWrapper.setTagValue(tagValue.getAttribute("Name"));
+									tagValueWrapper.setTagValue(element.getAttribute("Name"));
 									if(tagName.equals("ProgramUnit")){
 										
-										tagValueWrapper.setOtherKey(tagValue.getAttribute("ProgramUnitType"));
+										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
 									}
 									
 									existingTags.get(tagName).get(tagValueWrapper).add(elementWrapper);
@@ -374,7 +374,7 @@ public class AnalyseXMLs {
 				}
 			}
 		}
-		XSSFSheet summarySheet = workbook.createSheet("Summary");
-		XLWriter.addToSheet(workbook, summarySheet, data);
+		
+		return data;
 	}
 }
