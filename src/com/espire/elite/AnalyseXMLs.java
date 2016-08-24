@@ -32,7 +32,7 @@ import org.xml.sax.SAXException;
 public class AnalyseXMLs {
 	private Set<String> comparedFiles = new HashSet<>();
 	private Map<String, Map<String, String>> versionFileIndex = new HashMap<>();
-	private Map<String, Set<WrapperFile>> commonFiles = new HashMap<>();
+	private Map<String, Set<WrapperFile>> diffVersionFiles = new HashMap<>();
 	private Set<String> versionSet = new HashSet<String>();
 	private String baseVersion = null;
 	File directory;
@@ -152,11 +152,11 @@ public class AnalyseXMLs {
 						wrapperFile.setFileName(fileName);
 						wrapperFile.setFilePath(versionFileIndex.get(innerVersion).get(fileName));
 
-						if (commonFiles.get(fileName) == null) {
+						if (diffVersionFiles.get(fileName) == null) {
 							Set<WrapperFile> Wrapperfiles = new HashSet();
-							commonFiles.put(fileName, Wrapperfiles);
+							diffVersionFiles.put(fileName, Wrapperfiles);
 						}
-						commonFiles.get(fileName).add(wrapperFile);
+						diffVersionFiles.get(fileName).add(wrapperFile);
 
 					} else if (!version.equals(innerVersion) && !comparedFiles.contains(fileName)) {
 						System.out.print(",No");
@@ -231,7 +231,7 @@ public class AnalyseXMLs {
 		tagHeaderList.toArray(headerArray);
 		Integer rowNum = 1;
 		data.put("1", headerArray);
-		for (String fileName : commonFiles.keySet()) {
+		for (String fileName : diffVersionFiles.keySet()) {
 			// Set<String> tagValues = new HashSet<>();
 			Map<String, Set<Element>> tagValuesMap = new HashMap<>();
 
@@ -242,7 +242,7 @@ public class AnalyseXMLs {
 			
 			// status.add(fileName);
 
-			for (WrapperFile wrapperFile : commonFiles.get(fileName)) {
+			for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
 				getXMLData(wrapperFile);
 				for (String tagName : wrapperFile.getTagData().keySet()) {
 					if (tagValuesMap.get(tagName) == null) {
@@ -253,59 +253,50 @@ public class AnalyseXMLs {
 			}
 //                .xml  pu,fv--v1,v2,v3
 			// <fileName,Map<tagName, Map<tagValue, Set<diffrentVersions>>>>
-			Map<String, Map<String, Map<TagValueWrapper, Set<ElementWrapper>>>> existingTagsMap = new HashMap<>();
-			Map<String, Map<TagValueWrapper, Set<ElementWrapper>>> existingTags = new HashMap<>();
+			Map<String, Map<String, Map<String, Set<ElementWrapper>>>> existingTagsMap = new HashMap<>();
+			Map<String, Map<String, Set<ElementWrapper>>> existingTags = new HashMap<>();
 			for (String tagNameCurrent : tagValuesMap.keySet()) {
 				Set<Element> elementSet = tagValuesMap.get(tagNameCurrent);
 				for (Element element : elementSet) {
 					existingTagsMap.put(fileName, existingTags);
-					for (WrapperFile wrapperFile : commonFiles.get(fileName)) {
-						for (String tagName :  tagXpathMap.keySet()) {
-							if (tagName.equals(tagNameCurrent)) {
-								if (existingTags.get(tagName) == null) {
-									Map<TagValueWrapper, Set<ElementWrapper>> map = new HashMap<>();
-									existingTags.put(tagName, map);
+					for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
+						if(tagXpathMap.keySet().contains(tagNameCurrent)){
+							
+						
+						
+						
+								if (existingTags.get(tagNameCurrent) == null) {
+									Map<String, Set<ElementWrapper>> map = new HashMap<>();
+									existingTags.put(tagNameCurrent, map);
 								}
-								if (existingTags.get(tagName).get(element.getAttribute("Name")) == null) {
-									TagValueWrapper tagValueWrapper=new TagValueWrapper();
-									tagValueWrapper.setTagValue(element.getAttribute("Name"));
-									if(tagName.equals("ProgramUnit")){										
-										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
-									}
-									existingTags.get(tagName).put(tagValueWrapper, new HashSet<>());
+								if (existingTags.get(tagNameCurrent).get(element.getAttribute("Name")) == null) {
+									
+									existingTags.get(tagNameCurrent).put(element.getAttribute("Name"), new HashSet<>());
 								}
-								if (wrapperFile.getTagData().get(tagName) != null
-										&& wrapperFile.getTagData().get(tagName).contains(element)) {
+								if (wrapperFile.getTagData().get(tagNameCurrent) != null
+										&& wrapperFile.getTagData().get(tagNameCurrent).contains(element)) {
 									ElementWrapper elementWrapper = new ElementWrapper(element,
 											wrapperFile.getVersion());
-									// existingTags.get(tagName).get(tagValue.getAttribute("Name")).add(wrapperFile.getVersion());
-									TagValueWrapper tagValueWrapper=new TagValueWrapper();
-									tagValueWrapper.setTagValue(element.getAttribute("Name"));
-									if(tagName.equals("ProgramUnit")){
-										
-										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
-									}
-									
-									existingTags.get(tagName).get(tagValueWrapper).add(elementWrapper);
+									existingTags.get(tagNameCurrent).get(element.getAttribute("Name")).add(elementWrapper);
 								}
-							}
-						}
+						}	
 					}
 				}
 			}
+		
 			for (String fileName1 : existingTagsMap.keySet()) {
 
-				Map<String, Map<TagValueWrapper, Set<ElementWrapper>>> existingTagsForFile = existingTagsMap.get(fileName1);
+				Map<String, Map<String, Set<ElementWrapper>>> existingTagsForFile = existingTagsMap.get(fileName1);
 //				Integer rowNum = 1;
 				for (String tagName : existingTagsForFile.keySet()) {
 
-					for (TagValueWrapper tagValueWrapper : existingTagsForFile.get(tagName).keySet()) {
+					for (String tagValueWrapper : existingTagsForFile.get(tagName).keySet()) {
 						List<String> status = new ArrayList<String>();
 
-						System.out.print("," + tagName + "," + tagValueWrapper.getTagValue());
+						System.out.print("," + tagName + "," + tagValueWrapper);
 						status.add(fileName1);
 						status.add(tagName);
-						status.add(tagValueWrapper.getTagValue());
+						status.add(tagValueWrapper);
 
 						for (String verion : versionSet) {
 							ElementWrapper elementWrapperVersion = new ElementWrapper(null, verion);
@@ -346,20 +337,20 @@ public class AnalyseXMLs {
 									String puTxtCurrentVersion = elementWrapperCurrentVersion.getElement().getAttribute("ProgramUnitText").replaceAll("[\\n\\t]", "").replaceAll("\\s\\s+", "");
 									String puTxtBaseVersion = elementWrapperBaseVersion.getElement().getAttribute("ProgramUnitText").replaceAll("[\\n\\t]", "").replaceAll("\\s\\s+", "");	
 									if (puTxtBaseVersion.equals(puTxtCurrentVersion)) {
-										System.out.print(",Yes");
+										//System.out.print(",Yes");
 										status.add("Yes");
 									} else {
-										System.out.print(",Yes*");
+										//System.out.print(",Yes*");
 										status.add("Yes*");
 									}
 
 								} else {
-									System.out.print(",Yes");
+									//System.out.print(",Yes");
 									status.add("Yes");
 								}
 
 							} else {
-								System.out.print(",No");
+								//System.out.print(",No");
 								status.add("No");
 							}
 						}

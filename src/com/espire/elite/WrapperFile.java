@@ -15,6 +15,7 @@ public class WrapperFile {
 	private String version;
 	private String fileName;
 	private String filePath;
+	private Map<String, Set<Element>> tagData;
 
 	public String getFilePath() {
 		return filePath;
@@ -25,7 +26,6 @@ public class WrapperFile {
 	}
 
 	// <tagName,tageValues(node/element info)>
-	private Map<String, Set<Element>> tagData;
 	
 
 	public File getFile() {
