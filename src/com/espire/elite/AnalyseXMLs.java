@@ -32,7 +32,7 @@ import org.xml.sax.SAXException;
 public class AnalyseXMLs {
 	private Set<String> comparedFiles = new HashSet<>();
 	private Map<String, Map<String, String>> versionFileIndex = new HashMap<>();
-	private Map<String, Set<WrapperFile>> commonFiles = new HashMap<>();
+	private Map<String, Set<WrapperFile>> diffVersionFiles = new HashMap<>();
 	private Set<String> versionSet = new HashSet<String>();
 	private String baseVersion = null;
 	File directory;
@@ -152,11 +152,11 @@ public class AnalyseXMLs {
 						wrapperFile.setFileName(fileName);
 						wrapperFile.setFilePath(versionFileIndex.get(innerVersion).get(fileName));
 
-						if (commonFiles.get(fileName) == null) {
+						if (diffVersionFiles.get(fileName) == null) {
 							Set<WrapperFile> Wrapperfiles = new HashSet();
-							commonFiles.put(fileName, Wrapperfiles);
+							diffVersionFiles.put(fileName, Wrapperfiles);
 						}
-						commonFiles.get(fileName).add(wrapperFile);
+						diffVersionFiles.get(fileName).add(wrapperFile);
 
 					} else if (!version.equals(innerVersion) && !comparedFiles.contains(fileName)) {
 						System.out.print(",No");
@@ -231,7 +231,7 @@ public class AnalyseXMLs {
 		tagHeaderList.toArray(headerArray);
 		Integer rowNum = 1;
 		data.put("1", headerArray);
-		for (String fileName : commonFiles.keySet()) {
+		for (String fileName : diffVersionFiles.keySet()) {
 			// Set<String> tagValues = new HashSet<>();
 			Map<String, Set<Element>> tagValuesMap = new HashMap<>();
 
@@ -242,7 +242,7 @@ public class AnalyseXMLs {
 			
 			// status.add(fileName);
 
-			for (WrapperFile wrapperFile : commonFiles.get(fileName)) {
+			for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
 				getXMLData(wrapperFile);
 				for (String tagName : wrapperFile.getTagData().keySet()) {
 					if (tagValuesMap.get(tagName) == null) {
@@ -259,19 +259,19 @@ public class AnalyseXMLs {
 				Set<Element> elementSet = tagValuesMap.get(tagNameCurrent);
 				for (Element element : elementSet) {
 					existingTagsMap.put(fileName, existingTags);
-					for (WrapperFile wrapperFile : commonFiles.get(fileName)) {
+					for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
 						for (String tagName :  tagXpathMap.keySet()) {
 							if (tagName.equals(tagNameCurrent)) {
 								if (existingTags.get(tagName) == null) {
 									Map<TagValueWrapper, Set<ElementWrapper>> map = new HashMap<>();
 									existingTags.put(tagName, map);
 								}
-								if (existingTags.get(tagName).get(element.getAttribute("Name")) == null) {
-									TagValueWrapper tagValueWrapper=new TagValueWrapper();
-									tagValueWrapper.setTagValue(element.getAttribute("Name"));
-									if(tagName.equals("ProgramUnit")){										
-										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
-									}
+								TagValueWrapper tagValueWrapper=new TagValueWrapper();
+								tagValueWrapper.setTagValue(element.getAttribute("Name"));
+								if(tagName.equals("ProgramUnit")){										
+									tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
+								}
+								if (existingTags.get(tagName).get(tagValueWrapper) == null) {
 									existingTags.get(tagName).put(tagValueWrapper, new HashSet<>());
 								}
 								if (wrapperFile.getTagData().get(tagName) != null
@@ -279,12 +279,12 @@ public class AnalyseXMLs {
 									ElementWrapper elementWrapper = new ElementWrapper(element,
 											wrapperFile.getVersion());
 									// existingTags.get(tagName).get(tagValue.getAttribute("Name")).add(wrapperFile.getVersion());
-									TagValueWrapper tagValueWrapper=new TagValueWrapper();
-									tagValueWrapper.setTagValue(element.getAttribute("Name"));
-									if(tagName.equals("ProgramUnit")){
-										
-										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
-									}
+//									TagValueWrapper tagValueWrapper=new TagValueWrapper();
+//									tagValueWrapper.setTagValue(element.getAttribute("Name"));
+//									if(tagName.equals("ProgramUnit")){
+//										
+//										tagValueWrapper.setOtherKey(element.getAttribute("ProgramUnitType"));
+//									}
 									
 									existingTags.get(tagName).get(tagValueWrapper).add(elementWrapper);
 								}
