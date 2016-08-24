@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,132 +31,106 @@ import org.xml.sax.SAXException;
 
 public class AnalyseXMLs {
 	private Set<String> comparedFiles = new HashSet<>();
-	// Map<versionName,map<fileName,path>>
-	private Map<String, Map<String, String>> fileswithVersion = new HashMap<>();
-	// fileName,set of same file
+	private Map<String, Map<String, String>> versionFileIndex = new HashMap<>();
 	private Map<String, Set<WrapperFile>> diffVersionFiles = new HashMap<>();
 	private Set<String> versionSet = new HashSet<String>();
-	private Set<String> tagNames = new HashSet<>();
-	private Map<String, String> tagForScan = new HashMap<>();
 	private String baseVersion = null;
-
+	File directory;
+	Properties configProp = new Properties();
+	Properties tagNamePathProp = new Properties();
+	Map<String , String> tagXpathMap = new HashMap<>();
 	private static XSSFWorkbook workbook = new XSSFWorkbook();
-	//private static HSSFWorkbook workbook = new HSSFWorkbook();
-	private static XLWriter xlWriter = new XLWriter();
 	private List<String> tagHeaderList=new ArrayList<>();
 	private static String xmlPath=null;
-	// HSSFSheet sheet = workbook.createSheet("File Ex");
 
 	public static void main(String[] args) {
 		AnalyseXMLs analyseXMLs = new AnalyseXMLs();
-		Integer roNum = new Integer(1);
-		Map<String, Object[]> data = analyseXMLs.scanFiles(roNum);
+		Integer roNum = 1;
+		analyseXMLs.init();
+		Map<String, Object[]> data = analyseXMLs.scanFiles();
+		data = analyseXMLs.identifyDuplicateFiles(data, roNum);
 
-		analyseXMLs.identifyDuplicateFiles(data, roNum);
-
-		XSSFSheet sheet = workbook.createSheet("File Existence");
-		xlWriter.addToSheet(workbook, sheet, data);
+		XSSFSheet sheet = workbook.createSheet("File Availability");
+		XLWriter.addToSheet(workbook, sheet, data);
 
 		analyseXMLs.scanTags();
 
-		analyseXMLs.xlWriter.writeXL(workbook,xmlPath);
+		XLWriter.writeXL(workbook,xmlPath);
 	}
-
-	private Map<String, Object[]> scanFiles(Integer roNum) {
-		
-		Properties prop = new Properties();
-		InputStream input = null;
+	
+	/**
+	 * Method to initialize the external property files
+	 */
+	private void init(){
 		try {
-			input = new FileInputStream("config.properties");
-			prop.load(input);
+			configProp.load(new FileInputStream("config.properties"));
+			tagNamePathProp.load(new FileInputStream("tagnames.properties"));
+			Set<Object> keys = tagNamePathProp.keySet();
+			for(Object tagName : keys){
+				tagXpathMap.put(tagName.toString(),tagNamePathProp.getProperty(tagName.toString()));
+			}
+			
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
-		File directory;
-		if(prop.get("xmlLocation")!=null && !prop.get("xmlLocation").toString().isEmpty()){
-			directory = new File(prop.get("xmlLocation").toString());
-			xmlPath=prop.get("xmlLocation").toString();
+		if(configProp.get("xmlLocation")!=null && !configProp.get("xmlLocation").toString().isEmpty()){
+			directory = new File(configProp.get("xmlLocation").toString());
+			xmlPath=configProp.get("xmlLocation").toString();
 		}else{
 			directory = new File("D:/xml");	
 			xmlPath="D:/xml";
 		}
-		baseVersion=prop.get("baseversion").toString();
-		tagNames.add("Name");
-		tagNames.add("Alert");
-		tagNames.add("ProgramUnit");
-		tagNames.add("Block");
-		tagNames.add("Trigger");
-		tagNames.add("LOV");
-		tagNames.add("ModuleParameter");
-		tagNames.add("RecordGroup");
-		
-		
-		tagForScan.put("/Module/FormModule", "Name");
-		tagForScan.put("/Module/FormModule/Alert", "Alert");
-		tagForScan.put("/Module/FormModule/ProgramUnit", "ProgramUnit");
-		tagForScan.put("/Module/FormModule/Block", "Block");
-		tagForScan.put("/Module/FormModule/Trigger", "Trigger");
-		tagForScan.put("/Module/FormModule/LOV", "LOV");
-		tagForScan.put("/Module/FormModule/ModuleParameter", "ModuleParameter");
-		tagForScan.put("/Module/FormModule/RecordGroup", "RecordGroup");
+		baseVersion=configProp.get("baseversion").toString();
+	}
+
+
+	/**
+	 * 
+	 * @return Map <String, String[]> with <1, list of all unique files in a directory>
+	 * initializes VersionSet with <"File Name" , List of all versions in the base dir>
+	 * initializes VersionFileIndex with <versionDirName,<filename,filePath>>
+	 */
+	private Map<String, Object[]> scanFiles() {
 		
 		Map<String, Object[]> data = new HashMap<String, Object[]>();
-		// data.put("1", new Object[] {"Emp No.", "Name", "Salary"});
 
 		File[] fList = directory.listFiles();
-		// System.out.print(",,");
-		// for(int index=0;index < fList.length;index++){
-		// File file=fList[index];
-		// if (file.isDirectory()) {
-		// System.out.print(","+file.getName());
-		// versionSet.add(file.getName());
-		// Map<String, String> xmlfiles = new HashMap<>();
-		// for (File innerfile : file.listFiles()) {
-		// xmlfiles.put(innerfile.getName(), innerfile.getAbsolutePath());
-		// }
-		// fileswithVersion.put(file.getName(), xmlfiles);
-		// }
-		// }
-		List<String> versionSetTemp = new ArrayList<String>();
-		versionSetTemp.add("File Name");
+		
+		List<String> versionSetAll = new ArrayList<String>();
+		versionSetAll.add("File Name");
 
-		// versionSet.add("File Name");
-		// versionSet.add("Tag Value");
-
-		for (File file : fList) {
-			if (file.isDirectory()) {
-				// System.out.print(","+file.getName());
-				versionSet.add(file.getName());
+		for (File dir : fList) {
+			if (dir.isDirectory()) {
+				versionSet.add(dir.getName());
 				Map<String, String> xmlfiles = new HashMap<>();
-				for (File innerfile : file.listFiles()) {
+				for (File innerfile : dir.listFiles()) {
 					xmlfiles.put(innerfile.getName(), innerfile.getAbsolutePath());
 				}
-				fileswithVersion.put(file.getName(), xmlfiles);
+				versionFileIndex.put(dir.getName(), xmlfiles);
 			}
 		}
-		versionSetTemp.addAll(versionSet);
-		String[] inputArray = new String[versionSetTemp.size()];
-		versionSetTemp.toArray(inputArray);
-		data.put(roNum.toString(), inputArray);
+		versionSetAll.addAll(versionSet);
+		String[] inputArray = new String[versionSetAll.size()];
+		versionSetAll.toArray(inputArray);
+		data.put("1", inputArray);
 		
-		tagHeaderList.add("File Name");
-		tagHeaderList.add("Tag Name");
-		tagHeaderList.add("Tag Value");
-		tagHeaderList.addAll(versionSet);
-
-		System.out.println();
 		return data;
 	}
 
-	private void identifyDuplicateFiles(Map<String, Object[]> data, Integer rownum) {
+	/**
+	 * 
+	 * @param data The Map containing details of files scanned in ScanFiles.
+	 * @param rownum the file roe Index pointer 
+	 */
+	
+	private Map<String, Object[]> identifyDuplicateFiles(Map<String, Object[]> data, Integer rownum) {
 
-		Set<String> versionSet = fileswithVersion.keySet();
+		Set<String> versionSet = versionFileIndex.keySet();
 		for (String version : versionSet) {
-			Set<String> innerVersionSet = fileswithVersion.keySet();
-			Map<String, String> files = fileswithVersion.get(version);
+			Map<String, String> files = versionFileIndex.get(version);
 			Set<String> fileSet = files.keySet();
 
 			for (String fileName : fileSet) {
@@ -169,14 +142,14 @@ public class AnalyseXMLs {
 					fileStaus.add(fileName);
 				}
 
-				for (String innerVersion : innerVersionSet) {
+				for (String innerVersion : versionSet) {
 					WrapperFile wrapperFile = new WrapperFile();
-					if (fileswithVersion.get(innerVersion).get(fileName) != null && !comparedFiles.contains(fileName)) {
+					if (versionFileIndex.get(innerVersion).get(fileName) != null && !comparedFiles.contains(fileName)) {
 						System.out.print(",Yes");
 						fileStaus.add("Yes");
 						wrapperFile.setVersion(innerVersion);
 						wrapperFile.setFileName(fileName);
-						wrapperFile.setFilePath(fileswithVersion.get(innerVersion).get(fileName));
+						wrapperFile.setFilePath(versionFileIndex.get(innerVersion).get(fileName));
 
 						if (diffVersionFiles.get(fileName) == null) {
 							Set<WrapperFile> Wrapperfiles = new HashSet();
@@ -202,6 +175,7 @@ public class AnalyseXMLs {
 				comparedFiles.add(fileName);
 			}
 		}
+		return data;
 	}
 
 	public void getXMLData(WrapperFile wrapperFile) {
@@ -214,8 +188,9 @@ public class AnalyseXMLs {
 			Document doc = dBuilder.parse(inputFile);
 			doc.getDocumentElement().normalize();
 			XPath xPath = XPathFactory.newInstance().newXPath();
-			for (String expression : tagForScan.keySet()) {
-				String tagName = tagForScan.get(expression);
+			for (String tagName : tagXpathMap.keySet()) {
+			//for (String expression : tagForScan.keySet()) {
+				String expression = tagXpathMap.get(tagName);
 				NodeList nodeList = (NodeList) xPath.compile(expression).evaluate(doc, XPathConstants.NODESET);
 				for (int i = 0; i < nodeList.getLength(); i++) {
 					Node nNode = nodeList.item(i);
@@ -232,23 +207,6 @@ public class AnalyseXMLs {
 				}
 			}
 
-			//// XPath xPath1 = XPathFactory.newInstance().newXPath();
-			// expression = "/Module/FormModule/Alert";
-			// nodeList = (NodeList) xPath.compile(expression).evaluate(doc,
-			//// XPathConstants.NODESET);
-			// for (int i = 0; i < nodeList.getLength(); i++) {
-			// Node nNode = nodeList.item(i);
-			// if (nNode.getNodeType() == Node.ELEMENT_NODE) {
-			// Element eElement = (Element) nNode;
-			// eElement.getChildNodes();
-			// if (tagData.get("Alert") == null) {
-			// Set<String> tagValues = new HashSet<>();
-			// tagData.put("Alert", tagValues);
-			// }
-			// tagData.get("Alert").add(eElement.getAttribute("Name"));
-			// }
-			// }
-
 		} catch (ParserConfigurationException e) {
 			e.printStackTrace();
 		} catch (SAXException e) {
@@ -264,11 +222,15 @@ public class AnalyseXMLs {
 
 	public void scanTags() {
 		Map<String, Object[]> data = new HashMap<String, Object[]>();
+		tagHeaderList.add("File Name");
+		tagHeaderList.add("Tag Name");
+		tagHeaderList.add("Tag Value");
+		tagHeaderList.addAll(versionSet);
 		
 		String[] headerArray = new String[tagHeaderList.size()];
 		tagHeaderList.toArray(headerArray);
 		Integer rowNum = 1;
-		data.put(rowNum.toString(), headerArray);
+		data.put("1", headerArray);
 		for (String fileName : diffVersionFiles.keySet()) {
 			// Set<String> tagValues = new HashSet<>();
 			Map<String, Set<Element>> tagValuesMap = new HashMap<>();
@@ -298,7 +260,7 @@ public class AnalyseXMLs {
 				for (Element tagValue : tagValues) {
 					existingTagsMap.put(fileName, existingTags);
 					for (WrapperFile wrapperFile : diffVersionFiles.get(fileName)) {
-						for (String tagName : tagNames) {
+						for (String tagName :  tagXpathMap.keySet()) {
 							if (tagName.equals(tagNameCurrent)) {
 								if (existingTags.get(tagName) == null) {
 									Map<TagValueWrapper, Set<ElementWrapper>> map = new HashMap<>();
@@ -413,6 +375,6 @@ public class AnalyseXMLs {
 			}
 		}
 		XSSFSheet summarySheet = workbook.createSheet("Summary");
-		xlWriter.addToSheet(workbook, summarySheet, data);
+		XLWriter.addToSheet(workbook, summarySheet, data);
 	}
 }
